@@ -182,6 +182,10 @@ fun CountdownCard(c: Countdown, category: Category?, today: LocalDate, onClick: 
                     Text(c.target(today).format(dateFormat), fontSize = 13.sp, color = fg)
                     if (c.repeat != Repeat.NONE) Text("🔁 ${c.repeat.label}", fontSize = 12.sp, color = fg)
                     if (category != null) Text("${category.emoji} ${category.name}", fontSize = 12.sp, color = fg)
+                    val credit = if (hasImage) remember(c.imagePath) { imageCredit(c.imagePath!!) } else null
+                    if (credit != null) {
+                        Text("📷 ${credit.first} · Pexels", Modifier.clickable { openUrl(ctx, credit.second) }, fontSize = 10.sp, color = fg)
+                    }
                     if (c.location != null) {
                         Text("📍 ${c.location}", Modifier.clickable { openInMaps(ctx, c.location) }, fontSize = 12.sp, color = fg)
                     }
@@ -221,6 +225,7 @@ fun EditDialog(
     var location by remember { mutableStateOf(initial?.location ?: "") }
     var imagePath by remember { mutableStateOf(initial?.imagePath) }
     var pickDate by remember { mutableStateOf(false) }
+    var searchImage by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let { importImage(ctx, it)?.let { path -> imagePath = path } }
@@ -287,6 +292,7 @@ fun EditDialog(
                     }) { Text(if (imagePath == null) "🖼️ Hintergrundbild" else "Bild ändern") }
                     if (imagePath != null) TextButton(onClick = { imagePath = null }) { Text("Entfernen") }
                 }
+                TextButton(onClick = { searchImage = true }) { Text("🔍 Bild online suchen") }
                 Text("Wiederholung", fontSize = 12.sp)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Repeat.entries.forEach {
@@ -328,6 +334,10 @@ fun EditDialog(
             }
         },
     )
+
+    if (searchImage) {
+        PexelsDialog(title.trim(), { searchImage = false }, { path -> imagePath = path; searchImage = false })
+    }
 
     if (pickDate) {
         val state = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli())

@@ -23,3 +23,13 @@ fun openInMaps(ctx: Context, query: String) {
     val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/?api=1&query=$q"))
     runCatching { ctx.startActivity(app) }.onFailure { runCatching { ctx.startActivity(web) } }
 }
+
+fun openUrl(ctx: Context, url: String) {
+    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+}
+
+/** Fotografen-Nennung (Name, Link) zu einem heruntergeladenen Bild; liegt als .txt neben der Bilddatei. */
+fun imageCredit(path: String): Pair<String, String>? = runCatching {
+    val lines = File(path.removeSuffix(".jpg") + ".txt").readLines()
+    lines[0] to lines[1]
+}.getOrNull()
