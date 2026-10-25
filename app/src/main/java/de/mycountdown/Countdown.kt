@@ -24,6 +24,8 @@ data class Countdown(
     val date: LocalDate,
     val repeat: Repeat = Repeat.NONE,
     val categoryId: String? = null,
+    val location: String? = null,
+    val imagePath: String? = null,
 ) {
     /** Das nächste relevante Datum (bei Wiederholung immer in der Zukunft bzw. heute). */
     fun target(today: LocalDate = LocalDate.now()): LocalDate = when (repeat) {
@@ -85,14 +87,21 @@ data class CustomTemplate(
     val emoji: String,
     val repeat: Repeat,
     val monthDay: String? = null,
+    val imagePath: String? = null,
 ) {
-    fun toTemplate() = Template(title, emoji, repeat) {
+    fun toTemplate() = Template(title, emoji, repeat, imagePath) {
         monthDay?.let { runCatching { java.time.MonthDay.parse("--$it").atYear(LocalDate.now().year) }.getOrNull() }
     }
 }
 
 /** Vorlagen für typische Events. */
-data class Template(val title: String, val emoji: String, val repeat: Repeat, val date: () -> LocalDate?)
+data class Template(
+    val title: String,
+    val emoji: String,
+    val repeat: Repeat,
+    val imagePath: String? = null,
+    val date: () -> LocalDate?,
+)
 
 val templates = listOf(
     Template("Urlaub", "🏖️", Repeat.NONE) { null },
@@ -121,6 +130,8 @@ class CountdownStore(context: Context) {
                     date = LocalDate.parse(o.getString("date")),
                     repeat = Repeat.valueOf(o.getString("repeat")),
                     categoryId = o.optString("category").ifEmpty { null },
+                    location = o.optString("location").ifEmpty { null },
+                    imagePath = o.optString("image").ifEmpty { null },
                 )
             }
         }.getOrDefault(emptyList())
@@ -152,6 +163,7 @@ class CountdownStore(context: Context) {
                 CustomTemplate(
                     o.getString("id"), o.getString("title"), o.getString("emoji"),
                     Repeat.valueOf(o.getString("repeat")), o.optString("monthDay").ifEmpty { null },
+                    o.optString("image").ifEmpty { null },
                 )
             }
         }.getOrDefault(emptyList())
@@ -162,7 +174,7 @@ class CountdownStore(context: Context) {
         items.forEach {
             arr.put(
                 JSONObject().put("id", it.id).put("title", it.title).put("emoji", it.emoji)
-                    .put("repeat", it.repeat.name).put("monthDay", it.monthDay ?: "")
+                    .put("repeat", it.repeat.name).put("monthDay", it.monthDay ?: "").put("image", it.imagePath ?: "")
             )
         }
         prefs.edit().putString("templates", arr.toString()).apply()
@@ -179,6 +191,8 @@ class CountdownStore(context: Context) {
                     .put("date", it.date.toString())
                     .put("repeat", it.repeat.name)
                     .put("category", it.categoryId ?: "")
+                    .put("location", it.location ?: "")
+                    .put("image", it.imagePath ?: "")
             )
         }
         prefs.edit().putString("items", arr.toString()).apply()

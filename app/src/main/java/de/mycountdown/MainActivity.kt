@@ -6,7 +6,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +25,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import java.io.File
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -158,26 +165,38 @@ fun App(vm: CountdownViewModel = viewModel()) {
 @Composable
 fun CountdownCard(c: Countdown, category: Category?, today: LocalDate, onClick: () -> Unit) {
     val days = c.daysLeft(today)
+    val ctx = LocalContext.current
+    val hasImage = c.imagePath != null && File(c.imagePath).exists()
+    val fg = if (hasImage) Color.White else Color.Unspecified
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(c.emoji, fontSize = 36.sp)
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(c.title, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                Text(c.target(today).format(dateFormat), fontSize = 13.sp)
-                if (c.repeat != Repeat.NONE) Text("🔁 ${c.repeat.label}", fontSize = 12.sp)
-                if (category != null) Text("${category.emoji} ${category.name}", fontSize = 12.sp)
+        Box {
+            if (hasImage) {
+                AsyncImage(File(c.imagePath!!), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.5f)))
             }
-            Column(horizontalAlignment = Alignment.End) {
-                when {
-                    days == 0L -> Text("Heute!", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    days > 0 -> {
-                        Text("$days", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                        Text(if (days == 1L) "Tag" else "Tage", fontSize = 12.sp)
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(c.emoji, fontSize = 36.sp)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(c.title, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = fg)
+                    Text(c.target(today).format(dateFormat), fontSize = 13.sp, color = fg)
+                    if (c.repeat != Repeat.NONE) Text("🔁 ${c.repeat.label}", fontSize = 12.sp, color = fg)
+                    if (category != null) Text("${category.emoji} ${category.name}", fontSize = 12.sp, color = fg)
+                    if (c.location != null) {
+                        Text("📍 ${c.location}", Modifier.clickable { openInMaps(ctx, c.location) }, fontSize = 12.sp, color = fg)
                     }
-                    else -> {
-                        Text("${-days}", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                        Text(if (days == -1L) "Tag her" else "Tage her", fontSize = 12.sp)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    when {
+                        days == 0L -> Text("Heute!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = fg)
+                        days > 0 -> {
+                            Text("$days", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = fg)
+                            Text(if (days == 1L) "Tag" else "Tage", fontSize = 12.sp, color = fg)
+                        }
+                        else -> {
+                            Text("${-days}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = fg)
+                            Text(if (days == -1L) "Tag her" else "Tage her", fontSize = 12.sp, color = fg)
+                        }
                     }
                 }
             }
@@ -199,7 +218,13 @@ fun EditDialog(
     var date by remember { mutableStateOf(initial?.date ?: LocalDate.now().plusDays(7)) }
     var repeat by remember { mutableStateOf(initial?.repeat ?: Repeat.NONE) }
     var categoryId by remember { mutableStateOf(initial?.categoryId?.takeIf { id -> categories.any { it.id == id } }) }
+    var location by remember { mutableStateOf(initial?.location ?: "") }
+    var imagePath by remember { mutableStateOf(initial?.imagePath) }
     var pickDate by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { importImage(ctx, it)?.let { path -> imagePath = path } }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -212,6 +237,7 @@ fun EditDialog(
                         val apply = { t: Template ->
                             title = t.title; emoji = t.emoji; repeat = t.repeat
                             t.date()?.let { date = it }
+                            t.imagePath?.let { imagePath = it }
                         }
                         templates.forEach { t ->
                             AssistChip(onClick = { apply(t) }, label = { Text("${t.emoji} ${t.title}") })
@@ -248,6 +274,19 @@ fun EditDialog(
                         }
                     }
                 }
+                OutlinedTextField(location, { location = it }, label = { Text("Ort (optional)") }, singleLine = true)
+                if (location.isNotBlank()) {
+                    TextButton(onClick = { openInMaps(ctx, location.trim()) }) { Text("📍 In Google Maps suchen") }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (imagePath != null) {
+                        AsyncImage(File(imagePath!!), null, Modifier.size(56.dp), contentScale = ContentScale.Crop)
+                    }
+                    OutlinedButton(onClick = {
+                        imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }) { Text(if (imagePath == null) "🖼️ Hintergrundbild" else "Bild ändern") }
+                    if (imagePath != null) TextButton(onClick = { imagePath = null }) { Text("Entfernen") }
+                }
                 Text("Wiederholung", fontSize = 12.sp)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Repeat.entries.forEach {
@@ -260,6 +299,7 @@ fun EditDialog(
                         onAddTemplate(
                             CustomTemplate(
                                 title = title.trim(), emoji = emoji.ifBlank { "📅" }, repeat = repeat,
+                                imagePath = imagePath,
                                 monthDay = if (repeat == Repeat.YEARLY) "%02d-%02d".format(date.monthValue, date.dayOfMonth) else null,
                             )
                         )
@@ -273,7 +313,8 @@ fun EditDialog(
                 onClick = {
                     onSave(
                         (initial ?: Countdown(title = "", emoji = "", date = date))
-                            .copy(title = title.trim(), emoji = emoji.ifBlank { "📅" }, date = date, repeat = repeat, categoryId = categoryId)
+                            .copy(title = title.trim(), emoji = emoji.ifBlank { "📅" }, date = date, repeat = repeat, categoryId = categoryId,
+                                location = location.trim().ifEmpty { null }, imagePath = imagePath)
                     )
                 },
             ) { Text("Speichern") }
