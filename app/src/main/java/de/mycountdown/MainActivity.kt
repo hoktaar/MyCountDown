@@ -17,6 +17,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +43,20 @@ class CountdownViewModel(private val app: Application) : AndroidViewModel(app) {
         items = new
         store.save(new)
         CountdownWidget.updateAll(app)
+    }
+
+    var categories by mutableStateOf(store.loadCategories())
+        private set
+
+    fun addCategory(c: Category) {
+        categories = categories + c
+        store.saveCategories(categories)
+    }
+
+    fun deleteCategory(c: Category) {
+        categories = categories - c
+        store.saveCategories(categories)
+        update(items.map { if (it.categoryId == c.id) it.copy(categoryId = null) else it })
     }
 
     fun upsert(c: Countdown) = update(items.filterNot { it.id == c.id } + c)
@@ -70,41 +85,64 @@ private val dateFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).wit
 fun App(vm: CountdownViewModel = viewModel()) {
     var editing by remember { mutableStateOf<Countdown?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var managing by remember { mutableStateOf(false) }
+    var filter by remember { mutableStateOf<String?>(null) }
+    val activeFilter = filter?.takeIf { id -> vm.categories.any { it.id == id } }
     // Datum neu berechnen, wenn die App wieder in den Vordergrund kommt / Liste sich ändert.
     val today = LocalDate.now()
-    val sorted = vm.items.sortedBy { it.daysLeft(today).let { d -> if (d < 0) Long.MAX_VALUE + d else d } }
+    val sorted = vm.items
+        .filter { activeFilter == null || it.categoryId == activeFilter }
+        .sortedBy { it.daysLeft(today).let { d -> if (d < 0) Long.MAX_VALUE + d else d } }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("MyCountDown") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("MyCountDown") },
+                actions = { IconButton(onClick = { managing = true }) { Icon(Icons.Default.Edit, "Kategorien verwalten") } },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { adding = true }) { Icon(Icons.Default.Add, "Neuer Countdown") }
         },
     ) { padding ->
-        if (sorted.isEmpty()) {
-            Box(Modifier.padding(padding).fillMaxSize(), Alignment.Center) {
-                Text("Noch keine Countdowns.\nTippe auf + um einen anzulegen.", fontSize = 16.sp)
+        Column(Modifier.padding(padding)) {
+            if (vm.categories.isNotEmpty()) {
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(activeFilter == null, { filter = null }, label = { Text("Alle") })
+                    vm.categories.forEach { cat ->
+                        FilterChip(activeFilter == cat.id, { filter = cat.id }, label = { Text("${cat.emoji} ${cat.name}") })
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                Modifier.padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(sorted, key = { it.id }) { c ->
-                    CountdownCard(c, today, onClick = { editing = c })
+            if (sorted.isEmpty()) {
+                Box(Modifier.fillMaxSize(), Alignment.Center) {
+                    Text("Noch keine Countdowns.\nTippe auf + um einen anzulegen.", fontSize = 16.sp)
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(sorted, key = { it.id }) { c ->
+                        CountdownCard(c, vm.categories.find { it.id == c.categoryId }, today, onClick = { editing = c })
+                    }
                 }
             }
         }
     }
 
-    if (adding) EditDialog(null, { adding = false }, { vm.upsert(it); adding = false }, null)
+    if (managing) CategoryDialog(vm.categories, { managing = false }, vm::addCategory, vm::deleteCategory)
+    if (adding) EditDialog(null, vm.categories, { adding = false }, { vm.upsert(it); adding = false }, null)
     editing?.let { c ->
-        EditDialog(c, { editing = null }, { vm.upsert(it); editing = null }, { vm.delete(c); editing = null })
+        EditDialog(c, vm.categories, { editing = null }, { vm.upsert(it); editing = null }, { vm.delete(c); editing = null })
     }
 }
 
 @Composable
-fun CountdownCard(c: Countdown, today: LocalDate, onClick: () -> Unit) {
+fun CountdownCard(c: Countdown, category: Category?, today: LocalDate, onClick: () -> Unit) {
     val days = c.daysLeft(today)
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -114,6 +152,7 @@ fun CountdownCard(c: Countdown, today: LocalDate, onClick: () -> Unit) {
                 Text(c.title, fontSize = 18.sp, fontWeight = FontWeight.Medium)
                 Text(c.target(today).format(dateFormat), fontSize = 13.sp)
                 if (c.repeat != Repeat.NONE) Text("🔁 ${c.repeat.label}", fontSize = 12.sp)
+                if (category != null) Text("${category.emoji} ${category.name}", fontSize = 12.sp)
             }
             Column(horizontalAlignment = Alignment.End) {
                 when {
@@ -134,11 +173,12 @@ fun CountdownCard(c: Countdown, today: LocalDate, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditDialog(initial: Countdown?, onDismiss: () -> Unit, onSave: (Countdown) -> Unit, onDelete: (() -> Unit)?) {
+fun EditDialog(initial: Countdown?, categories: List<Category>, onDismiss: () -> Unit, onSave: (Countdown) -> Unit, onDelete: (() -> Unit)?) {
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var emoji by remember { mutableStateOf(initial?.emoji ?: "📅") }
     var date by remember { mutableStateOf(initial?.date ?: LocalDate.now().plusDays(7)) }
     var repeat by remember { mutableStateOf(initial?.repeat ?: Repeat.NONE) }
+    var categoryId by remember { mutableStateOf(initial?.categoryId?.takeIf { id -> categories.any { it.id == id } }) }
     var pickDate by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -165,6 +205,15 @@ fun EditDialog(initial: Countdown?, onDismiss: () -> Unit, onSave: (Countdown) -
                         else "📆 " + date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
                     )
                 }
+                if (categories.isNotEmpty()) {
+                    Text("Kategorie", fontSize = 12.sp)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(categoryId == null, { categoryId = null }, label = { Text("Keine") })
+                        categories.forEach { cat ->
+                            FilterChip(categoryId == cat.id, { categoryId = cat.id; emoji = cat.emoji }, label = { Text("${cat.emoji} ${cat.name}") })
+                        }
+                    }
+                }
                 Text("Wiederholung", fontSize = 12.sp)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Repeat.entries.forEach {
@@ -179,7 +228,7 @@ fun EditDialog(initial: Countdown?, onDismiss: () -> Unit, onSave: (Countdown) -
                 onClick = {
                     onSave(
                         (initial ?: Countdown(title = "", emoji = "", date = date))
-                            .copy(title = title.trim(), emoji = emoji.ifBlank { "📅" }, date = date, repeat = repeat)
+                            .copy(title = title.trim(), emoji = emoji.ifBlank { "📅" }, date = date, repeat = repeat, categoryId = categoryId)
                     )
                 },
             ) { Text("Speichern") }
@@ -207,4 +256,36 @@ fun EditDialog(initial: Countdown?, onDismiss: () -> Unit, onSave: (Countdown) -
             dismissButton = { TextButton(onClick = { pickDate = false }) { Text("Abbrechen") } },
         ) { DatePicker(state) }
     }
+}
+
+@Composable
+fun CategoryDialog(categories: List<Category>, onDismiss: () -> Unit, onAdd: (Category) -> Unit, onDelete: (Category) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var emoji by remember { mutableStateOf("📁") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Kategorien") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (categories.isEmpty()) Text("Noch keine Kategorien.", fontSize = 14.sp)
+                categories.forEach { cat ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${cat.emoji} ${cat.name}", Modifier.weight(1f), fontSize = 16.sp)
+                        IconButton(onClick = { onDelete(cat) }) { Icon(Icons.Default.Delete, "Löschen") }
+                    }
+                }
+                HorizontalDivider()
+                Text("Neue Kategorie", fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(emoji, { emoji = it.take(4) }, Modifier.width(80.dp), singleLine = true)
+                    OutlinedTextField(name, { name = it }, Modifier.weight(1f), label = { Text("Name") }, singleLine = true)
+                }
+                TextButton(
+                    enabled = name.isNotBlank(),
+                    onClick = { onAdd(Category(name = name.trim(), emoji = emoji.ifBlank { "📁" })); name = "" },
+                ) { Text("Hinzufügen") }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fertig") } },
+    )
 }

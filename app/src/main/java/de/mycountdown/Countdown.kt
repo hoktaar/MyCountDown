@@ -23,6 +23,7 @@ data class Countdown(
     val emoji: String,
     val date: LocalDate,
     val repeat: Repeat = Repeat.NONE,
+    val categoryId: String? = null,
 ) {
     /** Das nächste relevante Datum (bei Wiederholung immer in der Zukunft bzw. heute). */
     fun target(today: LocalDate = LocalDate.now()): LocalDate = when (repeat) {
@@ -70,6 +71,13 @@ fun easterSunday(year: Int): LocalDate {
     return LocalDate.of(year, month, day)
 }
 
+/** Vom Nutzer angelegte Kategorie, z. B. „Auto“ oder „Familie“. */
+data class Category(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val emoji: String,
+)
+
 /** Vorlagen für typische Events. */
 data class Template(val title: String, val emoji: String, val repeat: Repeat, val date: () -> LocalDate?)
 
@@ -99,9 +107,27 @@ class CountdownStore(context: Context) {
                     emoji = o.getString("emoji"),
                     date = LocalDate.parse(o.getString("date")),
                     repeat = Repeat.valueOf(o.getString("repeat")),
+                    categoryId = o.optString("category").ifEmpty { null },
                 )
             }
         }.getOrDefault(emptyList())
+    }
+
+    fun loadCategories(): List<Category> {
+        val raw = prefs.getString("categories", null) ?: return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                Category(o.getString("id"), o.getString("name"), o.getString("emoji"))
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun saveCategories(items: List<Category>) {
+        val arr = JSONArray()
+        items.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("emoji", it.emoji)) }
+        prefs.edit().putString("categories", arr.toString()).apply()
     }
 
     fun save(items: List<Countdown>) {
@@ -114,6 +140,7 @@ class CountdownStore(context: Context) {
                     .put("emoji", it.emoji)
                     .put("date", it.date.toString())
                     .put("repeat", it.repeat.name)
+                    .put("category", it.categoryId ?: "")
             )
         }
         prefs.edit().putString("items", arr.toString()).apply()
