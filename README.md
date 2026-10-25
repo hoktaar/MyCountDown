@@ -1,0 +1,21 @@
+# MyCountDown
+
+Android-App (Kotlin + Jetpack Compose) für Countdowns zu beliebigen Events.
+
+- Countdowns mit Name, Emoji und Datum anlegen, bearbeiten, löschen
+- Vorlagen: Urlaub, 1. Advent, Weihnachten, Silvester, Winter-/Sommerreifen, Geburtstag
+- Wiederholung: einmalig, jährlich, automatisch 1. Advent, automatisch Ostern
+- Eigene Kategorien (Name + Emoji) anlegen, zuweisen und danach filtern
+- Pro Event ein Ort (Suche und Anzeige in Google Maps) und ein Hintergrundbild, auch in Vorlagen speicherbar
+- Lokale Speicherung, sortiert nach dem nächsten Termin
+- Tägliche Erinnerung um 9 Uhr (7 Tage, 1 Tag und am Tag selbst)
+- Homescreen-Widget mit dem nächsten Countdown
+
+## Bauen
+Mit Android Studio öffnen und starten, oder `gradle :app:assembleDebug`
+(Android SDK nötig). Bei jedem Push baut GitHub Actions die Debug-APK.
+
+## Online-Bildsuche (Openverse)
+Die Bildsuche nutzt die [Openverse-API](https://api.openverse.org/) ohne API-Key. Es werden nur
+Bilder mit den Lizenzen CC0, Public Domain und CC BY angezeigt. Der Urheber wird auf der Karte
+genannt und verlinkt.
