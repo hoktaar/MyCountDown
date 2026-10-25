@@ -78,6 +78,19 @@ data class Category(
     val emoji: String,
 )
 
+/** Vom Nutzer gespeicherte Vorlage; bei jährlicher Wiederholung mit festem Tag (MM-dd). */
+data class CustomTemplate(
+    val id: String = UUID.randomUUID().toString(),
+    val title: String,
+    val emoji: String,
+    val repeat: Repeat,
+    val monthDay: String? = null,
+) {
+    fun toTemplate() = Template(title, emoji, repeat) {
+        monthDay?.let { runCatching { java.time.MonthDay.parse("--$it").atYear(LocalDate.now().year) }.getOrNull() }
+    }
+}
+
 /** Vorlagen für typische Events. */
 data class Template(val title: String, val emoji: String, val repeat: Repeat, val date: () -> LocalDate?)
 
@@ -128,6 +141,31 @@ class CountdownStore(context: Context) {
         val arr = JSONArray()
         items.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("emoji", it.emoji)) }
         prefs.edit().putString("categories", arr.toString()).apply()
+    }
+
+    fun loadTemplates(): List<CustomTemplate> {
+        val raw = prefs.getString("templates", null) ?: return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                CustomTemplate(
+                    o.getString("id"), o.getString("title"), o.getString("emoji"),
+                    Repeat.valueOf(o.getString("repeat")), o.optString("monthDay").ifEmpty { null },
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun saveTemplates(items: List<CustomTemplate>) {
+        val arr = JSONArray()
+        items.forEach {
+            arr.put(
+                JSONObject().put("id", it.id).put("title", it.title).put("emoji", it.emoji)
+                    .put("repeat", it.repeat.name).put("monthDay", it.monthDay ?: "")
+            )
+        }
+        prefs.edit().putString("templates", arr.toString()).apply()
     }
 
     fun save(items: List<Countdown>) {

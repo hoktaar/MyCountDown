@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -47,6 +48,19 @@ class CountdownViewModel(private val app: Application) : AndroidViewModel(app) {
 
     var categories by mutableStateOf(store.loadCategories())
         private set
+
+    var customTemplates by mutableStateOf(store.loadTemplates())
+        private set
+
+    fun addTemplate(t: CustomTemplate) {
+        customTemplates = customTemplates + t
+        store.saveTemplates(customTemplates)
+    }
+
+    fun deleteTemplate(t: CustomTemplate) {
+        customTemplates = customTemplates - t
+        store.saveTemplates(customTemplates)
+    }
 
     fun addCategory(c: Category) {
         categories = categories + c
@@ -135,9 +149,9 @@ fun App(vm: CountdownViewModel = viewModel()) {
     }
 
     if (managing) CategoryDialog(vm.categories, { managing = false }, vm::addCategory, vm::deleteCategory)
-    if (adding) EditDialog(null, vm.categories, { adding = false }, { vm.upsert(it); adding = false }, null)
+    if (adding) EditDialog(null, vm.categories, vm.customTemplates, vm::addTemplate, vm::deleteTemplate, { adding = false }, { vm.upsert(it); adding = false }, null)
     editing?.let { c ->
-        EditDialog(c, vm.categories, { editing = null }, { vm.upsert(it); editing = null }, { vm.delete(c); editing = null })
+        EditDialog(c, vm.categories, vm.customTemplates, vm::addTemplate, vm::deleteTemplate, { editing = null }, { vm.upsert(it); editing = null }, { vm.delete(c); editing = null })
     }
 }
 
@@ -173,7 +187,13 @@ fun CountdownCard(c: Countdown, category: Category?, today: LocalDate, onClick: 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditDialog(initial: Countdown?, categories: List<Category>, onDismiss: () -> Unit, onSave: (Countdown) -> Unit, onDelete: (() -> Unit)?) {
+fun EditDialog(
+    initial: Countdown?,
+    categories: List<Category>,
+    customTemplates: List<CustomTemplate>,
+    onAddTemplate: (CustomTemplate) -> Unit,
+    onDeleteTemplate: (CustomTemplate) -> Unit,
+    onDismiss: () -> Unit, onSave: (Countdown) -> Unit, onDelete: (() -> Unit)?) {
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var emoji by remember { mutableStateOf(initial?.emoji ?: "📅") }
     var date by remember { mutableStateOf(initial?.date ?: LocalDate.now().plusDays(7)) }
@@ -189,11 +209,25 @@ fun EditDialog(initial: Countdown?, categories: List<Category>, onDismiss: () ->
                 if (initial == null) {
                     Text("Vorlagen", fontSize = 12.sp)
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val apply = { t: Template ->
+                            title = t.title; emoji = t.emoji; repeat = t.repeat
+                            t.date()?.let { date = it }
+                        }
                         templates.forEach { t ->
-                            AssistChip(onClick = {
-                                title = t.title; emoji = t.emoji; repeat = t.repeat
-                                t.date()?.let { date = it }
-                            }, label = { Text("${t.emoji} ${t.title}") })
+                            AssistChip(onClick = { apply(t) }, label = { Text("${t.emoji} ${t.title}") })
+                        }
+                        customTemplates.forEach { ct ->
+                            InputChip(
+                                selected = false,
+                                onClick = { apply(ct.toTemplate()) },
+                                label = { Text("${ct.emoji} ${ct.title}") },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.Close, "Vorlage löschen",
+                                        Modifier.size(18.dp).clickable { onDeleteTemplate(ct) },
+                                    )
+                                },
+                            )
                         }
                     }
                 }
@@ -220,6 +254,17 @@ fun EditDialog(initial: Countdown?, categories: List<Category>, onDismiss: () ->
                         FilterChip(repeat == it, { repeat = it }, label = { Text(it.label) })
                     }
                 }
+                TextButton(
+                    enabled = title.isNotBlank(),
+                    onClick = {
+                        onAddTemplate(
+                            CustomTemplate(
+                                title = title.trim(), emoji = emoji.ifBlank { "📅" }, repeat = repeat,
+                                monthDay = if (repeat == Repeat.YEARLY) "%02d-%02d".format(date.monthValue, date.dayOfMonth) else null,
+                            )
+                        )
+                    },
+                ) { Text("⭐ Als Vorlage speichern") }
             }
         },
         confirmButton = {
