@@ -15,12 +15,7 @@ Android-App (Kotlin + Jetpack Compose) für Countdowns zu beliebigen Events.
 Mit Android Studio öffnen und starten, oder `gradle :app:assembleDebug`
 (Android SDK nötig). Bei jedem Push baut GitHub Actions die Debug-APK.
 
-## Online-Bildsuche (Pexels)
-Die Bildsuche nutzt die [Pexels-API](https://www.pexels.com/api/). Den kostenlosen Key
-trägst du lokal in `local.properties` ein (steht nicht im Repository):
-
-    PEXELS_API_KEY=dein_key
-
-Für den GitHub-Actions-Build legst du ihn als Repository-Secret `PEXELS_API_KEY` an.
-Ohne Key funktioniert die App normal, nur die Suche zeigt einen Hinweis.
-Achtung: Der Key steckt in der gebauten APK.
+## Online-Bildsuche (Openverse)
+Die Bildsuche nutzt die [Openverse-API](https://api.openverse.org/) ohne API-Key. Es werden nur
+Bilder mit den Lizenzen CC0, Public Domain und CC BY angezeigt. Der Urheber wird auf der Karte
+genannt und verlinkt.

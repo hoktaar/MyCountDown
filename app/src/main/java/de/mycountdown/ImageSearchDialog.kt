@@ -15,13 +15,13 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
-/** Bildsuche über Pexels; [onPicked] bekommt den lokalen Dateipfad des heruntergeladenen Fotos. */
+/** Bildsuche über Openverse; [onPicked] bekommt den lokalen Dateipfad des heruntergeladenen Fotos. */
 @Composable
-fun PexelsDialog(initialQuery: String, onDismiss: () -> Unit, onPicked: (String) -> Unit) {
+fun ImageSearchDialog(initialQuery: String, onDismiss: () -> Unit, onPicked: (String) -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf(initialQuery) }
-    var results by remember { mutableStateOf<List<PexelsPhoto>>(emptyList()) }
+    var results by remember { mutableStateOf<List<OpenversePhoto>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
 
@@ -30,7 +30,7 @@ fun PexelsDialog(initialQuery: String, onDismiss: () -> Unit, onPicked: (String)
         loading = true
         message = null
         scope.launch {
-            runCatching { searchPexels(query.trim()) }
+            runCatching { searchOpenverse(query.trim()) }
                 .onSuccess { results = it; if (it.isEmpty()) message = "Keine Treffer." }
                 .onFailure { message = "Suche fehlgeschlagen (${it.message})." }
             loading = false
@@ -42,9 +42,7 @@ fun PexelsDialog(initialQuery: String, onDismiss: () -> Unit, onPicked: (String)
         title = { Text("Bild suchen") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!pexelsConfigured) {
-                    Text("Kein Pexels-API-Key hinterlegt. Siehe README.", fontSize = 14.sp)
-                } else {
+                run {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(query, { query = it }, Modifier.weight(1f), label = { Text("Suchbegriff") }, singleLine = true)
                         Button(onClick = { search() }, enabled = !loading) { Text("Los") }
@@ -60,22 +58,22 @@ fun PexelsDialog(initialQuery: String, onDismiss: () -> Unit, onPicked: (String)
                         items(results) { photo ->
                             Column {
                                 AsyncImage(
-                                    photo.thumbUrl, photo.photographer,
+                                    photo.thumbUrl, photo.credit,
                                     Modifier.fillMaxWidth().height(80.dp).clickable(enabled = !loading) {
                                         loading = true
                                         scope.launch {
-                                            val path = downloadPexelsPhoto(ctx, photo)
+                                            val path = downloadOpenversePhoto(ctx, photo)
                                             loading = false
                                             if (path != null) onPicked(path) else message = "Download fehlgeschlagen."
                                         }
                                     },
                                     contentScale = ContentScale.Crop,
                                 )
-                                Text(photo.photographer, fontSize = 10.sp, maxLines = 1)
+                                Text(photo.credit, fontSize = 10.sp, maxLines = 1)
                             }
                         }
                     }
-                    TextButton(onClick = { openUrl(ctx, "https://www.pexels.com") }) { Text("Fotos von Pexels") }
+                    TextButton(onClick = { openUrl(ctx, "https://openverse.org") }) { Text("Bilder von Openverse") }
                 }
             }
         },

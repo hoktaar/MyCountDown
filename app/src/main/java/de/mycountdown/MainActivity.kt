@@ -184,7 +184,7 @@ fun CountdownCard(c: Countdown, category: Category?, today: LocalDate, onClick: 
                     if (category != null) Text("${category.emoji} ${category.name}", fontSize = 12.sp, color = fg)
                     val credit = if (hasImage) remember(c.imagePath) { imageCredit(c.imagePath!!) } else null
                     if (credit != null) {
-                        Text("📷 ${credit.first} · Pexels", Modifier.clickable { openUrl(ctx, credit.second) }, fontSize = 10.sp, color = fg)
+                        Text("📷 ${credit.first}", Modifier.clickable { openUrl(ctx, credit.second) }, fontSize = 10.sp, color = fg)
                     }
                     if (c.location != null) {
                         Text("📍 ${c.location}", Modifier.clickable { openInMaps(ctx, c.location) }, fontSize = 12.sp, color = fg)
@@ -336,7 +336,7 @@ fun EditDialog(
     )
 
     if (searchImage) {
-        PexelsDialog(title.trim(), { searchImage = false }, { path -> imagePath = path; searchImage = false })
+        ImageSearchDialog(title.trim(), { searchImage = false }, { path -> imagePath = path; searchImage = false })
     }
 
     if (pickDate) {

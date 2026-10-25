@@ -4,15 +4,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Pexels-API-Key: aus local.properties, Gradle-Property oder Umgebungsvariable (CI-Secret).
-val pexelsKey: String = java.util.Properties().apply {
-    val f = rootProject.file("local.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}.getProperty("PEXELS_API_KEY")
-    ?: (project.findProperty("PEXELS_API_KEY") as String?)
-    ?: System.getenv("PEXELS_API_KEY")
-    ?: ""
-
 android {
     namespace = "de.mycountdown"
     compileSdk = 34
@@ -23,7 +14,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        buildConfigField("String", "PEXELS_API_KEY", "\"$pexelsKey\"")
     }
 
     buildTypes {
@@ -40,7 +30,6 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 }
 
