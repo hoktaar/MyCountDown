@@ -1,9 +1,12 @@
 package de.mycountdown
 
+import android.Manifest
 import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,7 +33,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
 
-class CountdownViewModel(app: Application) : AndroidViewModel(app) {
+class CountdownViewModel(private val app: Application) : AndroidViewModel(app) {
     private val store = CountdownStore(app)
     var items by mutableStateOf(store.load())
         private set
@@ -38,6 +41,7 @@ class CountdownViewModel(app: Application) : AndroidViewModel(app) {
     private fun update(new: List<Countdown>) {
         items = new
         store.save(new)
+        CountdownWidget.updateAll(app)
     }
 
     fun upsert(c: Countdown) = update(items.filterNot { it.id == c.id } + c)
@@ -47,7 +51,15 @@ class CountdownViewModel(app: Application) : AndroidViewModel(app) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme { App() } }
+        createChannel(this)
+        scheduleDailyReminder(this)
+        setContent {
+            val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+            LaunchedEffect(Unit) {
+                if (!canNotify(this@MainActivity)) askPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            MaterialTheme { App() }
+        }
     }
 }
 

@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">MyCountDown</string>
+    <string name="widget_description">Zeigt den nächsten Countdown</string>
 </resources>
